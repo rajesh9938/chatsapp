@@ -69,10 +69,10 @@ function joinChat() {
     if (Notification.permission !== "granted") Notification.requestPermission();
 
     // Use ws://localhost:8000 for local, wss:// for Render
-    // let ws_protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    // socket = new WebSocket(`${ws_protocol}://${window.location.host}/ws/${myName}`);
+    let ws_protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    socket = new WebSocket(`${ws_protocol}://${window.location.host}/ws/${myName}`);
     // Local
-    socket = new WebSocket(`ws://localhost:8000/ws/${myName}`);
+    // socket = new WebSocket(`ws://localhost:8000/ws/${myName}`);
 
 
     socket.onmessage = function(event) {
