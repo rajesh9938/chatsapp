@@ -44,15 +44,7 @@ async def websocket_chat(websocket: WebSocket, username: str):
     await websocket.accept()
     connections[username] = websocket
 
-    # 🔔 Send join notification
-    join_msg = f"{username} joined the chat"
-    for conn in connections.values():
-        await conn.send_json({
-            "type": "notification",
-            "text": join_msg
-        })
-
-    # 🔹 Send old messages to newly connected user (type=old, no notification)
+    # 🔹 Send old messages to newly connected user
     db = get_db()
     cursor = db.cursor()
     cursor.execute("SELECT sender, text FROM messages ORDER BY id")
@@ -62,8 +54,7 @@ async def websocket_chat(websocket: WebSocket, username: str):
     for sender, text in old_messages:
         await websocket.send_json({
             "sender": sender,
-            "text": text,
-            "type": "old"  # <-- old messages, no notification
+            "text": text
         })
 
     try:
@@ -80,20 +71,12 @@ async def websocket_chat(websocket: WebSocket, username: str):
             db.commit()
             db.close()
 
-            # 🔔 Broadcast message to all
+            # 🔹 Broadcast message (SAME LOGIC)
             for conn in connections.values():
                 await conn.send_json({
                     "sender": username,
-                    "text": message,
-                    "type": "message"  # <-- new message notification
+                    "text": message
                 })
 
     except WebSocketDisconnect:
         del connections[username]
-
-        leave_msg = f"{username} left the chat"
-        for conn in connections.values():
-            await conn.send_json({
-                "type": "notification",
-                "text": leave_msg
-            })
