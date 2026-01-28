@@ -165,7 +165,9 @@ function joinChat() {
     document.getElementById("chat").style.display = "flex";
     document.getElementById("chatHeader").innerText = myName;
 
-    socket = new WebSocket(`ws://localhost:8000/ws/${myName}`);
+    // Replace ws://localhost:8000 with dynamic wss:// for Render
+    socket = new WebSocket(`wss://${window.location.host}/ws/${myName}`);
+
 
     socket.onmessage = function(event) {
         const data = JSON.parse(event.data);
