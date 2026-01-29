@@ -1,48 +1,52 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>FD WhatsApp Chat</title>
-
-<!-- MOBILE VIEWPORT -->
+<title>WhatsApp Chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
+    font-family: Arial;
     background: #111;
     display: flex;
     justify-content: center;
-    align-items: center;
-    height: 100vh;
 }
-
-/* PHONE FRAME */
 .phone {
-    width: 100%;
-    max-width: 420px;
+    width: 420px;
     height: 100vh;
-    max-height: 800px;
     background: #efeae2;
     display: flex;
     flex-direction: column;
 }
 
-/* LOGIN */
-#login {
-    flex: 1;
+/* TOP BAR */
+.topbar {
+    background: #075e54;
+    color: white;
+    padding: 14px;
+    font-weight: bold;
     display: flex;
-    justify-content: center;
     align-items: center;
 }
+.back-btn {
+    margin-right: 12px;
+    cursor: pointer;
+    font-size: 18px;
+}
 
-.login-box {
-    background: white;
-    padding: 25px;
-    border-radius: 12px;
-    width: 85%;
-    text-align: center;
+/* MENU */
+.menu {
+    background: #fff;
+}
+.menu-item {
+    padding: 14px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+.menu-item:hover {
+    background: #f5f5f5;
 }
 
 /* CHAT */
@@ -51,71 +55,47 @@ body {
     flex: 1;
     flex-direction: column;
 }
-
-.header {
-    background: #075e54;
-    color: white;
-    padding: 14px;
-    text-align: center;
-    font-weight: bold;
-}
-
 .messages {
     flex: 1;
     padding: 10px;
     overflow-y: auto;
 }
-
 .message {
     max-width: 75%;
     padding: 8px 12px;
     margin: 6px 0;
     border-radius: 8px;
-    font-size: 14px;
 }
-
 .sent {
     background: #dcf8c6;
     margin-left: auto;
-    border-bottom-right-radius: 0;
 }
-
 .received {
-    background: white;
+    background: #fff;
     margin-right: auto;
-    border-bottom-left-radius: 0;
 }
-
-.sender-name {
+.sender {
     font-size: 11px;
-    color: #555;
-    margin-bottom: 3px;
     font-weight: bold;
 }
-
 .footer {
     display: flex;
     padding: 8px;
     background: #f0f0f0;
 }
-
 .footer input {
     flex: 1;
-    padding: 12px;
+    padding: 10px;
     border-radius: 20px;
     border: none;
-    outline: none;
-    font-size: 14px;
 }
-
 .footer button {
     margin-left: 8px;
-    padding: 12px 16px;
     border: none;
-    border-radius: 50%;
     background: #075e54;
     color: white;
-    font-size: 16px;
+    border-radius: 50%;
+    width: 40px;
 }
 </style>
 </head>
@@ -124,26 +104,34 @@ body {
 
 <div class="phone">
 
-<!-- LOGIN -->
-<div id="login">
-    <div class="login-box">
-        <h3>Select Your Name</h3>
-        <select id="username">
-            <option value="">Choose</option>
-            <option value="jatin">Jatin</option>
-            <option value="rajesh">Rajesh</option>
-            <option value="kartik">Kartik</option>
-        </select><br><br>
-        <button onclick="joinChat()">Enter Chat</button>
-    </div>
+<!-- SELECT NAME -->
+<div class="topbar" id="title">Select Your Name</div>
+<div class="menu" id="nameMenu">
+    <div class="menu-item" onclick="selectName('jatin')">Jatin</div>
+    <div class="menu-item" onclick="selectName('rajesh')">Rajesh</div>
+    <div class="menu-item" onclick="selectName('kartik')">Kartik</div>
+</div>
+
+<!-- CHAT LIST -->
+<div class="menu" id="chatMenu" style="display:none">
+    <div class="menu-item" onclick="openGroup()">👥 Group Chat</div>
+    <div class="menu-item" onclick="openDM('jatin')">Jatin</div>
+    <div class="menu-item" onclick="openDM('rajesh')">Rajesh</div>
+    <div class="menu-item" onclick="openDM('kartik')">Kartik</div>
 </div>
 
 <!-- CHAT -->
 <div id="chat">
-    <div class="header" id="chatHeader"></div>
-    <div id="messages" class="messages"></div>
+    <div class="topbar">
+        <span class="back-btn" onclick="goBack()">⬅</span>
+        <span id="chatHeader"></span>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
     <div class="footer">
-        <input id="msg" placeholder="Type a message" onkeydown="handleEnter(event)">
+        <input id="msg" placeholder="Message"
+               onkeydown="if(event.key==='Enter')send()">
         <button onclick="send()">➤</button>
     </div>
 </div>
@@ -151,60 +139,75 @@ body {
 </div>
 
 <script>
-let socket;
 let myName;
+let room;
+let socket;
 
-function joinChat() {
-    myName = document.getElementById("username").value;
-    if (!myName) {
-        alert("Select your name!");
-        return;
-    }
+function selectName(name) {
+    myName = name;
+    title.innerText = "Chats";
+    nameMenu.style.display = "none";
+    chatMenu.style.display = "block";
+}
 
-    document.getElementById("login").style.display = "none";
-    document.getElementById("chat").style.display = "flex";
-    document.getElementById("chatHeader").innerText = myName;
+function openGroup() {
+    room = "group";
+    startChat("Group Chat");
+}
 
-    // Replace ws://localhost:8000 with dynamic wss:// for Render
+function openDM(user) {
+    if (user === myName) return alert("Can't chat with yourself");
+    const users = [myName, user].sort();
+    room = `dm:${users[0]}:${users[1]}`;
+    startChat("Chat with " + user);
+}
+
+function startChat(titleText) {
+    chatMenu.style.display = "none";
+    chat.style.display = "flex";
+    chatHeader.innerText = titleText;
+    messages.innerHTML = "";
+
     socket = new WebSocket(`wss://${window.location.host}/ws/${myName}`);
+    // socket = new WebSocket(`ws://localhost:8000/ws/${myName}/${room}`);
 
-
-    socket.onmessage = function(event) {
-        const data = JSON.parse(event.data);
+    socket.onmessage = e => {
+        const d = JSON.parse(e.data);
         const div = document.createElement("div");
+        div.className = "message " +
+            (d.sender === myName ? "sent" : "received");
 
-        div.classList.add("message");
-        div.classList.add(data.sender === myName ? "sent" : "received");
-
-        if (data.sender !== myName) {
-            const nameDiv = document.createElement("div");
-            nameDiv.className = "sender-name";
-            nameDiv.innerText = data.sender;
-            div.appendChild(nameDiv);
+        if (d.sender !== myName) {
+            const s = document.createElement("div");
+            s.className = "sender";
+            s.innerText = d.sender;
+            div.appendChild(s);
         }
 
-        const textDiv = document.createElement("div");
-        textDiv.innerText = data.text;
-        div.appendChild(textDiv);
+        const t = document.createElement("div");
+        t.innerText = d.text;
+        div.appendChild(t);
 
-        const messages = document.getElementById("messages");
         messages.appendChild(div);
         messages.scrollTop = messages.scrollHeight;
     };
 }
 
-function send() {
-    const input = document.getElementById("msg");
-    if (input.value && socket) {
-        socket.send(input.value);
-        input.value = "";
-    }
+function goBack() {
+    if (socket) socket.close();
+    chat.style.display = "none";
+    chatMenu.style.display = "block";
+    messages.innerHTML = "";
 }
 
-function handleEnter(e) {
-    if (e.key === "Enter") send();
+function send() {
+    if (msg.value) {
+        socket.send(msg.value);
+        msg.value = "";
+    }
 }
 </script>
 
 </body>
 </html>
+ZZ

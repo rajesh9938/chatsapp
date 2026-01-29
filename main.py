@@ -8,9 +8,11 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 ALLOWED_USERS = {"jatin", "rajesh", "kartik"}
-connections = {}
 
-# ---------------- DB SETUP ----------------
+# room_name -> {username: websocket}
+rooms = {}
+
+# ---------- DB ----------
 def get_db():
     return sqlite3.connect("chat.db", check_same_thread=False)
 
@@ -21,6 +23,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sender TEXT,
+            room TEXT,
             text TEXT,
             timestamp TEXT
         )
@@ -29,29 +32,38 @@ def init_db():
     db.close()
 
 init_db()
-# ------------------------------------------
+# ------------------------
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("chat.html", {"request": request})
 
-@app.websocket("/ws/{username}")
-async def websocket_chat(websocket: WebSocket, username: str):
+
+@app.websocket("/ws/{username}/{room}")
+async def websocket_chat(websocket: WebSocket, username: str, room: str):
+
     if username not in ALLOWED_USERS:
         await websocket.close()
         return
 
     await websocket.accept()
-    connections[username] = websocket
 
-    # 🔹 Send old messages to newly connected user
+    if room not in rooms:
+        rooms[room] = {}
+
+    rooms[room][username] = websocket
+
+    # 🔹 send room-specific old messages
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT sender, text FROM messages ORDER BY id")
-    old_messages = cursor.fetchall()
+    cursor.execute(
+        "SELECT sender, text FROM messages WHERE room=? ORDER BY id",
+        (room,)
+    )
+    history = cursor.fetchall()
     db.close()
 
-    for sender, text in old_messages:
+    for sender, text in history:
         await websocket.send_json({
             "sender": sender,
             "text": text
@@ -59,24 +71,26 @@ async def websocket_chat(websocket: WebSocket, username: str):
 
     try:
         while True:
-            message = await websocket.receive_text()
+            text = await websocket.receive_text()
 
-            # 🔹 Save message to DB
+            # save message
             db = get_db()
             cursor = db.cursor()
             cursor.execute(
-                "INSERT INTO messages (sender, text, timestamp) VALUES (?, ?, ?)",
-                (username, message, datetime.now().isoformat())
+                "INSERT INTO messages (sender, room, text, timestamp) VALUES (?, ?, ?, ?)",
+                (username, room, text, datetime.now().isoformat())
             )
             db.commit()
             db.close()
 
-            # 🔹 Broadcast message (SAME LOGIC)
-            for conn in connections.values():
-                await conn.send_json({
+            # broadcast to same room
+            for ws in rooms[room].values():
+                await ws.send_json({
                     "sender": username,
-                    "text": message
+                    "text": text
                 })
 
     except WebSocketDisconnect:
-        del connections[username]
+        del rooms[room][username]
+        if not rooms[room]:
+            del rooms[room]
